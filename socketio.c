@@ -21,6 +21,7 @@
 static inline int is_connected(int, unsigned int);
 static inline int sio_select(int, unsigned int, int);
 static inline void print_error(const char *, ... );
+
 #define SELECT_READ 0x0
 #define SELECT_WRITE 0x1 
 
@@ -60,17 +61,15 @@ int sio_connect (int sd, const char *host,
 		return -1;
 	}
 	
-
 	if (res == -1){
 		if (args.flags & SIO_VERBOSE)
-			print_error("sio_connect failed : %s \n", strerror(res));
+			print_error("sio_connect failed : %s \n",
+				    strerror(res));
 		return -1;
 	}
 	
 	return 0;
 }
-
-
 
 
 /**
@@ -95,16 +94,22 @@ int sio_send (int sd, char *buf,
 			if (errno == EAGAIN ||
 			    errno == EWOULDBLOCK)
 				sio_select(sd, args.timeout,  SELECT_WRITE);
-			else
+			else {
+				if (args.flags & SIO_VERBOSE)
+					print_error("sio_send failed : %s\n",
+						    strerror(errno));
+				return -1; 
+			}
+			if (nfails >= args.maxnfails) {
+				if (args.flags & SIO_VERBOSE)
+					print_error("sio_send failed :"
+						    " Timeout reached\n");
 				return -1;
-
-			if (nfails >= args.maxnfails)
-				return -1;
+			}
 		} else {
 			total_bytes += temp;
 			nfails = 0;
 		}
-
 	}
 
 	return 0;
@@ -132,16 +137,27 @@ int sio_recv (int sd, char *buf,
 			if (errno == EAGAIN ||
 			    errno == EWOULDBLOCK)
 				sio_select(sd, args.timeout, SELECT_READ);
-			else
+			else {
+				if (args.flags & SIO_VERBOSE)
+					print_error ("sio_recv failed : %s\n",
+						     strerror(errno));
 				return -1;
-
-			if (nfails >= args.maxnfails)
+			}
+			if (nfails >= args.maxnfails){
+				if (args.flags & SIO_VERBOSE)
+					print_error("sio_recv failed :"
+						    " Timeout reached.\n");
 				return -1;
+			}
 		} else if (temp > 0){
 			total_bytes += (size_t)temp;
 			nfails = 0;
-		} else  /* Connection is disconnected */
+		} else  /* Socket is disconnected */ {
+			if (args.flags & SIO_VERBOSE)
+				print_error("sio_recv() failed :"
+					    "Socket is disconnected.\n");
 			return -1;
+		}
 	}
 
 	return 0;
